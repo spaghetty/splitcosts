@@ -28,8 +28,26 @@ var (
 	}
 )
 
+//Elements is the set of results
+type Elements struct {
+	Marker     string
+	TimeFrames []string
+	Elements   map[string][]float64
+	Totals     []float64
+}
+
+//NewElements is a constructor for Elements type
+func NewElements(frameSize int, marker string) *Elements {
+	el := &Elements{}
+	el.Marker = marker
+	el.TimeFrames = make([]string, frameSize)
+	el.Elements = make(map[string][]float64)
+	el.Totals = make([]float64, frameSize)
+	return el
+}
+
 //Extract is the function that extract the selection from aws
-func Extract(selector costexplorer.GroupDefinition) {
+func Extract(selector costexplorer.GroupDefinition) *Elements {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	}))
@@ -53,11 +71,13 @@ func Extract(selector costexplorer.GroupDefinition) {
 			fmt.Println(awsErr.Code(), awsErr.Message())
 		}
 	}
-	timeframes := make([]string, 0, len(costs.ResultsByTime))
-	teams := make(map[string][]float64)
-	totalsPerMonth := make([]float64, len(costs.ResultsByTime))
+	marker := "TEAM"
+	if selector == ServiceSelector {
+		marker = "SERVICE"
+	}
+	elements := NewElements(len(costs.ResultsByTime), marker)
 	for i, v := range costs.ResultsByTime {
-		timeframes = append(timeframes, fmt.Sprintf("%v/%v", *v.TimePeriod.Start, *v.TimePeriod.End))
+		elements.TimeFrames[i] = fmt.Sprintf("%v/%v", *v.TimePeriod.Start, *v.TimePeriod.End)
 		for _, elem := range v.Groups {
 			unitaryCost, _ := strconv.ParseFloat(*(elem.Metrics["BlendedCost"].Amount), 10)
 			for _, k := range elem.Keys {
@@ -66,34 +86,40 @@ func Extract(selector costexplorer.GroupDefinition) {
 				if len(splitted) > 1 && splitted[1] != "" {
 					label = splitted[1]
 				}
-				if _, ok := teams[label]; !ok {
-					teams[label] = make([]float64, len(costs.ResultsByTime))
+				if _, ok := elements.Elements[label]; !ok {
+					elements.Elements[label] = make([]float64, len(costs.ResultsByTime))
 				}
-				teams[label][i] = unitaryCost
-				totalsPerMonth[i] += unitaryCost
+				elements.Elements[label][i] = unitaryCost
+				elements.Totals[i] += unitaryCost
 			}
 		}
 	}
+	return elements
+
+}
+
+//Display is rendering function
+func Display(elements *Elements) {
 	table := uitable.New()
 	table.MaxColWidth = 80
 	ac := accounting.Accounting{Symbol: "$", Precision: 2, Thousand: ".", Decimal: ","}
-	tmpstring := make([]interface{}, len(timeframes)+1)
-	tmpstring[0] = color.RedString("TEAMS")
-	for i, v := range timeframes {
-		tmpstring[i+1] = color.RedString(v)
+	tmpstring := make([]interface{}, len(elements.TimeFrames)+1)
+	tmpstring[0] = color.RedString(elements.Marker)
+	for i, v := range elements.TimeFrames {
+		tmpstring[i+1] = color.YellowString(v)
 	}
 	table.AddRow(tmpstring...)
-	for k, v := range teams {
-		tmpval := make([]interface{}, len(timeframes)+1)
+	for k, v := range elements.Elements {
+		tmpval := make([]interface{}, len(elements.TimeFrames)+1)
 		tmpval[0] = color.GreenString(k)
 		for i, j := range v {
 			tmpval[i+1] = ac.FormatMoney(j)
 		}
 		table.AddRow(tmpval...)
 	}
-	tmpTotal := make([]interface{}, len(timeframes)+1)
+	tmpTotal := make([]interface{}, len(elements.TimeFrames)+1)
 	tmpTotal[0] = color.HiMagentaString("Tot")
-	for i, v := range totalsPerMonth {
+	for i, v := range elements.Totals {
 		tmpTotal[i+1] = color.HiMagentaString(ac.FormatMoney(v))
 	}
 	table.AddRow(tmpTotal...)

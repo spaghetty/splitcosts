@@ -29,7 +29,8 @@ var teamCmd = &cobra.Command{
 	Long:  `exposes costs splitted by team`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("team called")
-		engine.Extract(engine.TeamSelector)
+		elements := engine.Extract(engine.TeamSelector)
+		engine.Display(elements)
 	},
 }
 

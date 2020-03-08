@@ -34,7 +34,8 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("service called")
-		engine.Extract(engine.ServiceSelector)
+		elements := engine.Extract(engine.ServiceSelector)
+		engine.Display(elements)
 	},
 }
 
